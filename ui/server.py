@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # Add scripts directory to path for db.py helpers
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scripts"))
 
 DB_PATH = os.path.expanduser("~/.claude-lazy-mem/sessions.db")
 MODE_FILE = os.path.expanduser("~/.claude/mem-mode")
@@ -196,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/health":
             import subprocess
             patched = subprocess.run(
-                ["python3", os.path.join(os.path.dirname(__file__), "..", "scripts", "patch-hooks-json.py"), "--check"],
+                ["python3", os.path.join(os.path.dirname(__file__), "scripts", "patch-hooks-json.py"), "--check"],
                 capture_output=True
             ).returncode == 0
             self.send_json({"patched": patched, "db_path": DB_PATH, "version": "1.0.0"})
