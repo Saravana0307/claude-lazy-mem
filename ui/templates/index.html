@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>claude-lazy-mem</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-icon">⚡</span>
+        <span class="brand-name">claude-lazy-mem</span>
+      </div>
+      <div class="mode-toggle">
+        <span class="mode-label">Mode:</span>
+        <button id="mode-btn" class="mode-btn" onclick="toggleMode()">
+          <span id="mode-text">—</span>
+        </button>
+        <span class="mode-hint" id="mode-hint"></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Summary Cards -->
+    <section class="cards">
+      <div class="card">
+        <div class="card-value" id="total-sessions">—</div>
+        <div class="card-label">Total Sessions</div>
+      </div>
+      <div class="card">
+        <div class="card-value" id="lazy-sessions">—</div>
+        <div class="card-label">Lazy Sessions</div>
+        <div class="card-sub" id="lazy-pct">—% of total</div>
+      </div>
+      <div class="card highlight">
+        <div class="card-value" id="tokens-saved">—</div>
+        <div class="card-label">Tokens Saved</div>
+        <div class="card-sub" id="ctx-size">est. context size: —</div>
+      </div>
+      <div class="card highlight">
+        <div class="card-value" id="cost-saved">—</div>
+        <div class="card-label">Cost Saved</div>
+        <div class="card-sub">cumulative</div>
+      </div>
+    </section>
+
+    <!-- Charts Row -->
+    <section class="charts-row">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Sessions Over Time</span>
+          <div class="chart-filters">
+            <button class="filter-btn active" onclick="setDays(7, this)">7d</button>
+            <button class="filter-btn" onclick="setDays(30, this)">30d</button>
+            <button class="filter-btn" onclick="setDays(90, this)">90d</button>
+          </div>
+        </div>
+        <canvas id="sessions-chart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Cumulative Tokens Saved</span>
+        </div>
+        <canvas id="savings-chart" height="220"></canvas>
+      </div>
+    </section>
+
+    <!-- Projects Breakdown -->
+    <section class="projects-section">
+      <h2 class="section-title">Projects</h2>
+      <table class="projects-table" id="projects-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Sessions</th>
+            <th>Lazy %</th>
+            <th>Est. Context</th>
+            <th>Tokens Saved</th>
+            <th>Cost Saved</th>
+          </tr>
+        </thead>
+        <tbody id="projects-body">
+          <tr><td colspan="6" class="empty">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Sessions Table -->
+    <section class="sessions-section">
+      <div class="section-header">
+        <h2 class="section-title">Recent Sessions</h2>
+        <div class="chart-filters">
+          <button class="filter-btn active" onclick="setSessionDays(7, this)">7d</button>
+          <button class="filter-btn" onclick="setSessionDays(30, this)">30d</button>
+          <button class="filter-btn" onclick="setSessionDays(90, this)">all</button>
+        </div>
+      </div>
+      <table class="sessions-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Project</th>
+            <th>Mode</th>
+            <th>Input Tokens</th>
+            <th>Output Tokens</th>
+            <th>Model</th>
+            <th>Cost</th>
+          </tr>
+        </thead>
+        <tbody id="sessions-body">
+          <tr><td colspan="7" class="empty">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Health -->
+    <section class="health-section" id="health-section">
+      <div id="health-content"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

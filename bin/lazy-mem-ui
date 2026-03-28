@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# lazy-mem-ui — Launch the claude-lazy-mem web dashboard
+INSTALL_DIR="$HOME/.claude-lazy-mem"
+PORT="${LAZY_MEM_PORT:-7124}"
+exec python3 "$INSTALL_DIR/ui/server.py" --port "$PORT"
