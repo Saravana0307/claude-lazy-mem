@@ -1,0 +1,24 @@
+install.sh
+  7340b1e06472608e 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "3bd2c65ef98ed05e982a1e274db7f838ea4071c8",
+  "prompts": {
+    "7340b1e06472608e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "635362b1-0f8b-47eb-a954-7f43554976d6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "saravanakumartaza <saravanakumar@tazapay.com>",
+      "messages": [],
+      "total_additions": 83,
+      "total_deletions": 0,
+      "accepted_lines": 83,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/51780753d27cba2a000eb3067a97232614a0a94d41eebf8ca81bdb7fa589d67a"
+    }
+  }
+}
