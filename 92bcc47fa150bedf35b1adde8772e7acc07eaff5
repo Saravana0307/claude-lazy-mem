@@ -1,0 +1,22 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "92bcc47fa150bedf35b1adde8772e7acc07eaff5",
+  "prompts": {
+    "7340b1e06472608e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "635362b1-0f8b-47eb-a954-7f43554976d6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "saravanakumartaza <saravanakumar@tazapay.com>",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 3,
+      "accepted_lines": 10,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/2a9df45088a6b454b20c5a1be07689b437f4f1c3e536322dcf837b3b48f12722"
+    }
+  }
+}
