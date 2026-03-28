@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lazy-mem — claude-lazy-mem CLI
-# Usage: lazy-mem [status|toggle|lazy|full|benchmark|ui|doctor|help]
+# Usage: lazy-mem [status|toggle|lazy|full|benchmark|web|doctor|help]
 
 INSTALL_DIR="$HOME/.claude-lazy-mem"
 MODE_FILE="$HOME/.claude/mem-mode"
@@ -36,7 +36,7 @@ except Exception:
 PYEOF
   echo ""
   echo "  lazy-mem toggle    switch mode"
-  echo "  lazy-mem ui        open dashboard"
+  echo "  lazy-mem web       open dashboard"
   echo "  lazy-mem doctor    verify setup"
 }
 
@@ -146,13 +146,12 @@ cmd_doctor() {
   fi
 }
 
-cmd_ui() {
+cmd_web() {
   echo "Starting claude-lazy-mem dashboard at http://localhost:$UI_PORT ..."
   if command -v open > /dev/null 2>&1; then
-    # Open browser after a brief delay
     (sleep 1.5 && open "http://localhost:$UI_PORT") &
   fi
-  exec python3 "$INSTALL_DIR/ui/server.py" --port "$UI_PORT"
+  exec python3 "$INSTALL_DIR/server.py" --port "$UI_PORT"
 }
 
 CMD="${1:-status}"
@@ -162,7 +161,7 @@ case "$CMD" in
   lazy)      bash "$HOME/.claude/hooks/mem-mode-toggle.sh" lazy ;;
   full)      bash "$HOME/.claude/hooks/mem-mode-toggle.sh" full ;;
   benchmark) shift; cmd_benchmark "$@" ;;
-  ui)        cmd_ui ;;
+  web)       cmd_web ;;
   doctor)    cmd_doctor ;;
   help|--help|-h)
     echo "Usage: lazy-mem [command]"
@@ -173,7 +172,7 @@ case "$CMD" in
     echo "  lazy        Set lazy mode"
     echo "  full        Set full mode"
     echo "  benchmark   Detailed token savings report"
-    echo "  ui          Open web dashboard (localhost:7124)"
+    echo "  web         Open web dashboard (localhost:7124)"
     echo "  doctor      Verify all hooks are correctly set up"
     echo "  help        Show this help"
     ;;
