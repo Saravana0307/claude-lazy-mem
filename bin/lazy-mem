@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# lazy-mem — claude-lazy-mem CLI
+# Usage: lazy-mem [status|toggle|lazy|full|benchmark|ui|doctor|help]
+
+INSTALL_DIR="$HOME/.claude-lazy-mem"
+MODE_FILE="$HOME/.claude/mem-mode"
+UI_PORT=7124
+
+get_mode() {
+  cat "$MODE_FILE" 2>/dev/null | tr -d '[:space:]' || echo "lazy"
+}
+
+cmd_status() {
+  MODE=$(get_mode)
+  echo "claude-lazy-mem status"
+  echo "──────────────────────"
+  echo "  Mode: $MODE"
+  echo ""
+  python3 "$INSTALL_DIR/scripts/db.py" summary 2>/dev/null | python3 - <<'PYEOF'
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    total = d.get("total", 0)
+    lazy  = d.get("lazy", 0)
+    full  = d.get("full", 0)
+    pct   = d.get("lazy_pct", 0)
+    saved = d.get("tokens_saved", 0)
+    cost  = d.get("cost_saved", 0)
+    ctx   = d.get("estimated_context_size", 25000)
+    print(f"  Sessions tracked : {total} total ({lazy} lazy / {full} full, {pct}% lazy)")
+    print(f"  Est. context size: ~{ctx:,} tokens (full mode)")
+    print(f"  Tokens saved     : ~{saved:,}")
+    print(f"  Cost saved       : ~${cost:.4f}")
+except Exception:
+    print("  (no session data yet)")
+PYEOF
+  echo ""
+  echo "  lazy-mem toggle    switch mode"
+  echo "  lazy-mem ui        open dashboard"
+  echo "  lazy-mem doctor    verify setup"
+}
+
+cmd_benchmark() {
+  echo "claude-lazy-mem benchmark report"
+  echo "─────────────────────────────────"
+  python3 "$INSTALL_DIR/scripts/db.py" summary 2>/dev/null | python3 - <<'PYEOF'
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    total = d.get("total", 0)
+    lazy  = d.get("lazy", 0)
+    full  = d.get("full", 0)
+    pct   = d.get("lazy_pct", 0)
+    saved = d.get("tokens_saved", 0)
+    cost  = d.get("cost_saved", 0)
+    ctx   = d.get("estimated_context_size", 25000)
+    print(f"Sessions tracked  : {total}")
+    print(f"  lazy            : {lazy} ({pct}%)")
+    print(f"  full            : {full}")
+    print()
+    print(f"Est. context size : ~{ctx:,} tokens/full session")
+    print(f"Token savings     : ~{saved:,} tokens")
+    print(f"Cost saved        : ~${cost:.4f}")
+    print()
+    print("  (Run 'lazy-mem benchmark --csv' for raw data)")
+except Exception:
+    print("No session data yet. Start a few sessions to see metrics.")
+PYEOF
+
+  if [ "$1" = "--csv" ]; then
+    python3 "$INSTALL_DIR/scripts/db.py" sessions --days 365 --csv
+  fi
+
+  echo ""
+  echo "Project breakdown:"
+  echo "─────────────────────────────────"
+  python3 "$INSTALL_DIR/scripts/db.py" projects 2>/dev/null | python3 - <<'PYEOF'
+import sys, json
+try:
+    projects = json.loads(sys.stdin.read())
+    if not projects:
+        print("  (no data)")
+    else:
+        print(f"  {'Project':<25} {'Sessions':>8} {'Lazy%':>6} {'Saved':>12} {'Cost':>8}")
+        print(f"  {'─'*25} {'─'*8} {'─'*6} {'─'*12} {'─'*8}")
+        for p in projects:
+            pct = round(p['lazy'] / p['total'] * 100) if p['total'] else 0
+            print(f"  {p['project']:<25} {p['total']:>8} {pct:>5}% {p['tokens_saved']:>12,} {'$'+str(round(p['cost_saved'],4)):>8}")
+except Exception:
+    print("  (no data)")
+PYEOF
+}
+
+cmd_doctor() {
+  echo "claude-lazy-mem doctor"
+  echo "──────────────────────"
+  PASS=true
+
+  # Check mode file
+  if [ -f "$MODE_FILE" ]; then
+    MODE=$(get_mode)
+    echo "  [OK] Mode file: $MODE_FILE ($MODE)"
+  else
+    echo "  [WARN] Mode file missing: $MODE_FILE"
+    PASS=false
+  fi
+
+  # Check hooks.json patch
+  if python3 "$INSTALL_DIR/scripts/patch-hooks-json.py" --check 2>/dev/null; then
+    echo "  [OK] hooks.json patched"
+  else
+    echo "  [FAIL] hooks.json NOT patched — run: bash ~/.claude/hooks/patch-mem-hooks.sh"
+    PASS=false
+  fi
+
+  # Check notify hook symlink
+  if [ -L "$HOME/.claude/hooks/mem-mode-notify.sh" ]; then
+    echo "  [OK] Notify hook symlink in place"
+  else
+    echo "  [WARN] Notify hook symlink missing: $HOME/.claude/hooks/mem-mode-notify.sh"
+    PASS=false
+  fi
+
+  # Check conditional hook symlink
+  if [ -L "$HOME/.claude/hooks/mem-context-conditional.sh" ]; then
+    echo "  [OK] Context gate hook symlink in place"
+  else
+    echo "  [WARN] Context gate hook missing: $HOME/.claude/hooks/mem-context-conditional.sh"
+    PASS=false
+  fi
+
+  # Check DB
+  if python3 "$INSTALL_DIR/scripts/db.py" summary > /dev/null 2>&1; then
+    echo "  [OK] Database accessible"
+  else
+    echo "  [WARN] Database not initialized"
+    PASS=false
+  fi
+
+  echo ""
+  if $PASS; then
+    echo "All checks passed."
+  else
+    echo "Some checks failed. Re-run install.sh to repair."
+    exit 1
+  fi
+}
+
+cmd_ui() {
+  echo "Starting claude-lazy-mem dashboard at http://localhost:$UI_PORT ..."
+  if command -v open > /dev/null 2>&1; then
+    # Open browser after a brief delay
+    (sleep 1.5 && open "http://localhost:$UI_PORT") &
+  fi
+  exec python3 "$INSTALL_DIR/ui/server.py" --port "$UI_PORT"
+}
+
+CMD="${1:-status}"
+case "$CMD" in
+  status)    cmd_status ;;
+  toggle)    bash "$HOME/.claude/hooks/mem-mode-toggle.sh" ;;
+  lazy)      bash "$HOME/.claude/hooks/mem-mode-toggle.sh" lazy ;;
+  full)      bash "$HOME/.claude/hooks/mem-mode-toggle.sh" full ;;
+  benchmark) shift; cmd_benchmark "$@" ;;
+  ui)        cmd_ui ;;
+  doctor)    cmd_doctor ;;
+  help|--help|-h)
+    echo "Usage: lazy-mem [command]"
+    echo ""
+    echo "Commands:"
+    echo "  status      Current mode + savings summary (default)"
+    echo "  toggle      Switch lazy↔full"
+    echo "  lazy        Set lazy mode"
+    echo "  full        Set full mode"
+    echo "  benchmark   Detailed token savings report"
+    echo "  ui          Open web dashboard (localhost:7124)"
+    echo "  doctor      Verify all hooks are correctly set up"
+    echo "  help        Show this help"
+    ;;
+  *)
+    echo "Unknown command: $CMD. Run 'lazy-mem help' for usage." >&2
+    exit 1
+    ;;
+esac
