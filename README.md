@@ -20,7 +20,7 @@
 ## Install
 
 ```bash
-git clone https://github.com/saravanak0307/claude-lazy-mem
+git clone https://github.com/Saravana0307/claude-lazy-mem
 cd claude-lazy-mem
 bash install.sh
 ```
