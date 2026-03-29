@@ -18,7 +18,17 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scripts"))
 
 DB_PATH = os.path.expanduser("~/.claude-lazy-mem/sessions.db")
+CONFIG_PATH = os.path.expanduser("~/.claude-lazy-mem/config.json")
 MODE_FILE = os.path.expanduser("~/.claude/mem-mode")
+DEFAULT_CONTEXT_TOKENS = 25000
+
+
+def get_context_load_tokens():
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f).get("context_load_tokens", DEFAULT_CONTEXT_TOKENS)
+    except Exception:
+        return DEFAULT_CONTEXT_TOKENS
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -50,30 +60,32 @@ def set_mode(mode):
 
 
 def api_summary():
+    ctx_tokens = get_context_load_tokens()
     conn = get_db()
     if not conn:
         return {"total": 0, "lazy": 0, "full": 0, "lazy_pct": 0,
-                "tokens_saved": 0, "cost_saved": 0, "estimated_context_size": 25000}
+                "tokens_saved": 0, "cost_saved": 0, "estimated_context_size": ctx_tokens,
+                "calibrated": False}
     try:
         row = conn.execute("""
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN mode='lazy' THEN 1 ELSE 0 END) as lazy_count,
-                SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count,
-                AVG(CASE WHEN mode='full' AND input_tokens IS NOT NULL THEN input_tokens END) as avg_full_input
+                SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count
             FROM sessions
         """).fetchone()
         total = row["total"] or 0
         lazy = row["lazy_count"] or 0
         full = row["full_count"] or 0
-        avg_full = int(row["avg_full_input"] or 25000)
-        tokens_saved = lazy * avg_full
+        tokens_saved = lazy * ctx_tokens
         cost_saved = round(tokens_saved * 0.30 / 1_000_000, 4)
+        calibrated = os.path.isfile(CONFIG_PATH) and "context_load_tokens" in json.load(open(CONFIG_PATH))
         return {
             "total": total, "lazy": lazy, "full": full,
             "lazy_pct": round(lazy / total * 100, 1) if total else 0,
             "tokens_saved": tokens_saved, "cost_saved": cost_saved,
-            "estimated_context_size": avg_full,
+            "estimated_context_size": ctx_tokens,
+            "calibrated": calibrated,
         }
     finally:
         conn.close()
@@ -115,6 +127,7 @@ def api_daily(days=30):
 
 
 def api_projects():
+    ctx_tokens = get_context_load_tokens()
     conn = get_db()
     if not conn:
         return []
@@ -123,24 +136,50 @@ def api_projects():
             SELECT project,
                 COUNT(*) as total,
                 SUM(CASE WHEN mode='lazy' THEN 1 ELSE 0 END) as lazy_count,
-                SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count,
-                AVG(CASE WHEN mode='full' AND input_tokens IS NOT NULL THEN input_tokens END) as avg_full
+                SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count
             FROM sessions GROUP BY project ORDER BY total DESC
         """).fetchall()
         result = []
         for r in rows:
-            avg = int(r["avg_full"] or 25000)
             lazy = r["lazy_count"] or 0
-            ts = lazy * avg
+            ts = lazy * ctx_tokens
             result.append({
                 "project": r["project"], "total": r["total"],
                 "lazy": lazy, "full": r["full_count"] or 0,
-                "avg_context_size": avg, "tokens_saved": ts,
+                "avg_context_size": ctx_tokens, "tokens_saved": ts,
                 "cost_saved": round(ts * 0.30 / 1_000_000, 4),
             })
         return result
     finally:
         conn.close()
+
+
+def api_calibrate():
+    import subprocess
+    plugin = os.path.expanduser("~/.claude/plugins/marketplaces/thedotmack/plugin")
+    bun_runner = os.path.join(plugin, "scripts", "bun-runner.js")
+    worker = os.path.join(plugin, "scripts", "worker-service.cjs")
+    try:
+        result = subprocess.run(
+            ["node", bun_runner, worker, "hook", "claude-code", "context"],
+            capture_output=True, text=True, timeout=30
+        )
+        output = result.stdout + result.stderr
+    except Exception:
+        output = ""
+    token_estimate = max(1000, len(output) // 4)
+    config = {}
+    try:
+        with open(CONFIG_PATH) as f:
+            config = json.load(f)
+    except Exception:
+        pass
+    config["context_load_tokens"] = token_estimate
+    config["calibrated_at"] = datetime.now(timezone.utc).isoformat()
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+    return {"context_load_tokens": token_estimate, "chars": len(output)}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -193,6 +232,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(api_daily(days))
         elif path == "/api/projects":
             self.send_json(api_projects())
+        elif path == "/api/calibrate":
+            self.send_json(api_calibrate())
         elif path == "/api/health":
             import subprocess
             patched = subprocess.run(
