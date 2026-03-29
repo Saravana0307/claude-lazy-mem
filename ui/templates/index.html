@@ -117,9 +117,15 @@
       </table>
     </section>
 
-    <!-- Health -->
+    <!-- Health + Calibrate -->
     <section class="health-section" id="health-section">
       <div id="health-content"></div>
+      <div class="calibrate-row">
+        <button class="calibrate-btn" onclick="calibrate()" id="calibrate-btn">
+          Calibrate context size
+        </button>
+        <span class="calibrate-hint">Measures actual claude-mem context load to improve savings accuracy</span>
+      </div>
     </section>
   </main>
 

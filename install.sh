@@ -60,7 +60,11 @@ python3 "$INSTALL_DIR/scripts/patch-hooks-json.py" --claude-md
 # 9. Initialize the SQLite database
 python3 "$INSTALL_DIR/scripts/db.py" summary > /dev/null 2>&1 || true
 
-# 10. Symlink CLI to somewhere on PATH
+# 10. Calibrate context load size for accurate savings metrics
+echo "  Calibrating context load size..."
+python3 "$INSTALL_DIR/scripts/db.py" calibrate 2>/dev/null || echo "  (calibration skipped — run 'lazy-mem calibrate' manually)"
+
+# 11. Symlink CLI to somewhere on PATH
 if [ -d "$HOME/.local/bin" ]; then
   ln -sf "$INSTALL_DIR/bin/lazy-mem" "$HOME/.local/bin/lazy-mem"
   echo "  Linked: lazy-mem → $HOME/.local/bin/lazy-mem"

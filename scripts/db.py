@@ -5,6 +5,7 @@ Usage:
   db.py log-session --session-id ID --project NAME --mode lazy|full
   db.py update-session --session-id ID --input N --output N --cache-read N --cache-write N --model M --cost F
   db.py log-context-load --session-id ID --trigger user_requested|auto
+  db.py calibrate
   db.py summary
   db.py sessions [--days N] [--csv]
   db.py daily [--days N]
@@ -18,6 +19,8 @@ import sys
 from datetime import datetime, timezone
 
 DB_PATH = os.path.expanduser("~/.claude-lazy-mem/sessions.db")
+CONFIG_PATH = os.path.expanduser("~/.claude-lazy-mem/config.json")
+DEFAULT_CONTEXT_TOKENS = 25000
 
 
 def get_conn():
@@ -53,6 +56,60 @@ def init_db(conn):
         CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);
     """)
     conn.commit()
+
+
+def load_config():
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_config(data):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+
+
+def get_context_load_tokens():
+    """Return calibrated context load size, or default estimate."""
+    return load_config().get("context_load_tokens", DEFAULT_CONTEXT_TOKENS)
+
+
+def cmd_calibrate(args):
+    """Run worker-service context hook, measure output, store token estimate."""
+    import subprocess
+    plugin = os.path.expanduser("~/.claude/plugins/marketplaces/thedotmack/plugin")
+    bun_runner = os.path.join(plugin, "scripts", "bun-runner.js")
+    worker = os.path.join(plugin, "scripts", "worker-service.cjs")
+
+    if not os.path.isfile(worker):
+        print(f"ERROR: worker-service.cjs not found at {worker}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Running context load to measure size (may take a few seconds)...")
+    try:
+        result = subprocess.run(
+            ["node", bun_runner, worker, "hook", "claude-code", "context"],
+            capture_output=True, text=True, timeout=30
+        )
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        print("Timed out — using default estimate of 25,000 tokens.")
+        output = ""
+
+    # Rough estimate: ~4 chars per token
+    token_estimate = max(1000, len(output) // 4)
+
+    config = load_config()
+    config["context_load_tokens"] = token_estimate
+    config["calibrated_at"] = datetime.now(timezone.utc).isoformat()
+    save_config(config)
+
+    print(f"Calibrated: context load ≈ {token_estimate:,} tokens ({len(output):,} chars)")
+    print(f"Saved to: {CONFIG_PATH}")
 
 
 def cmd_log_session(args):
@@ -99,28 +156,27 @@ def cmd_summary(args):
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN mode='lazy' THEN 1 ELSE 0 END) as lazy_count,
-            SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count,
-            AVG(CASE WHEN mode='full' AND input_tokens IS NOT NULL THEN input_tokens END) as avg_full_input
+            SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count
         FROM sessions
     """).fetchone()
 
     total = row["total"] or 0
     lazy = row["lazy_count"] or 0
     full = row["full_count"] or 0
-    avg_full = row["avg_full_input"] or 25000  # default estimate
+    ctx_tokens = get_context_load_tokens()
 
-    estimated_savings = lazy * int(avg_full)
-    # Use approximate cache_read price for claude-sonnet: $0.30/1M
-    cost_saved = estimated_savings * 0.30 / 1_000_000
+    tokens_saved = lazy * ctx_tokens
+    cost_saved = tokens_saved * 0.30 / 1_000_000
 
     result = {
         "total": total,
         "lazy": lazy,
         "full": full,
         "lazy_pct": round(lazy / total * 100, 1) if total else 0,
-        "estimated_context_size": int(avg_full),
-        "tokens_saved": estimated_savings,
+        "estimated_context_size": ctx_tokens,
+        "tokens_saved": tokens_saved,
         "cost_saved": round(cost_saved, 4),
+        "calibrated": "context_load_tokens" in load_config(),
     }
     print(json.dumps(result))
     conn.close()
@@ -177,14 +233,14 @@ def cmd_daily(args):
 def cmd_projects(args):
     conn = get_conn()
     init_db(conn)
+    ctx_tokens = get_context_load_tokens()
 
     rows = conn.execute("""
         SELECT
             project,
             COUNT(*) as total,
             SUM(CASE WHEN mode='lazy' THEN 1 ELSE 0 END) as lazy_count,
-            SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count,
-            AVG(CASE WHEN mode='full' AND input_tokens IS NOT NULL THEN input_tokens END) as avg_full_input
+            SUM(CASE WHEN mode='full' THEN 1 ELSE 0 END) as full_count
         FROM sessions
         GROUP BY project
         ORDER BY total DESC
@@ -192,15 +248,14 @@ def cmd_projects(args):
 
     result = []
     for r in rows:
-        avg_full = r["avg_full_input"] or 25000
         lazy = r["lazy_count"] or 0
-        tokens_saved = lazy * int(avg_full)
+        tokens_saved = lazy * ctx_tokens
         result.append({
             "project": r["project"],
             "total": r["total"],
             "lazy": lazy,
             "full": r["full_count"] or 0,
-            "avg_context_size": int(avg_full),
+            "avg_context_size": ctx_tokens,
             "tokens_saved": tokens_saved,
             "cost_saved": round(tokens_saved * 0.30 / 1_000_000, 4),
         })
@@ -211,6 +266,8 @@ def cmd_projects(args):
 def main():
     parser = argparse.ArgumentParser(description="claude-lazy-mem database helper")
     sub = parser.add_subparsers(dest="cmd")
+
+    sub.add_parser("calibrate")
 
     p = sub.add_parser("log-session")
     p.add_argument("--session-id", required=True)
@@ -230,7 +287,7 @@ def main():
     p.add_argument("--session-id", required=True)
     p.add_argument("--trigger", default="user_requested")
 
-    p = sub.add_parser("summary")
+    sub.add_parser("summary")
 
     p = sub.add_parser("sessions")
     p.add_argument("--days", type=int, default=30)
@@ -239,7 +296,7 @@ def main():
     p = sub.add_parser("daily")
     p.add_argument("--days", type=int, default=30)
 
-    p = sub.add_parser("projects")
+    sub.add_parser("projects")
 
     args = parser.parse_args()
     if not args.cmd:
@@ -247,6 +304,7 @@ def main():
         sys.exit(1)
 
     dispatch = {
+        "calibrate": cmd_calibrate,
         "log-session": cmd_log_session,
         "update-session": cmd_update_session,
         "log-context-load": cmd_log_context_load,

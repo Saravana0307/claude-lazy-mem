@@ -57,11 +57,15 @@ async function toggleMode() {
 async function loadSummary() {
   const d = await fetch("/api/summary").then(r => r.json());
 
+  // Store calibrated context size for chart use
+  window._contextLoadTokens = d.estimated_context_size || 25000;
+
   setText("total-sessions", d.total.toLocaleString());
   setText("lazy-sessions", d.lazy.toLocaleString());
   setText("lazy-pct", `${d.lazy_pct}% of total`);
   setText("tokens-saved", formatTokens(d.tokens_saved));
-  setText("ctx-size", `est. context: ~${formatTokens(d.estimated_context_size)}`);
+  const ctxLabel = d.calibrated ? `context: ~${formatTokens(d.estimated_context_size)}` : `est. context: ~${formatTokens(d.estimated_context_size)} (not calibrated)`;
+  setText("ctx-size", ctxLabel);
   setText("cost-saved", `$${d.cost_saved.toFixed(4)}`);
 }
 
@@ -74,9 +78,10 @@ async function loadCharts(days) {
   const lazyCounts = data.map(d => d.lazy_count || 0);
   const fullCounts = data.map(d => d.full_count || 0);
 
-  // Cumulative savings (estimate: 25k tokens per lazy session)
+  // Cumulative savings using calibrated context size
+  const ctxSize = window._contextLoadTokens || 25000;
   let cum = 0;
-  const cumulativeSavings = lazyCounts.map(v => { cum += v * 25000; return cum; });
+  const cumulativeSavings = lazyCounts.map(v => { cum += v * ctxSize; return cum; });
 
   renderSessionsChart(labels, lazyCounts, fullCounts);
   renderSavingsChart(labels, cumulativeSavings);
@@ -243,6 +248,25 @@ async function loadHealth() {
       ⚠ hooks.json patch missing — plugin may have updated.<br>
       Run: <code>lazy-mem doctor</code> then <code>bash ~/.claude/hooks/patch-mem-hooks.sh</code>
     </div>`;
+  }
+}
+
+// ─── Calibrate ───────────────────────────────────────────────────────────────
+
+async function calibrate() {
+  const btn = document.getElementById("calibrate-btn");
+  btn.disabled = true;
+  btn.textContent = "Calibrating...";
+  try {
+    const d = await fetch("/api/calibrate").then(r => r.json());
+    window._contextLoadTokens = d.context_load_tokens;
+    btn.textContent = `Calibrated: ~${formatTokens(d.context_load_tokens)} tokens`;
+    // Refresh summary and charts with new calibrated size
+    await Promise.all([loadSummary(), loadCharts(currentDays), loadProjects()]);
+  } catch (e) {
+    btn.textContent = "Calibration failed";
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Calibrate context size"; }, 3000);
   }
 }
 

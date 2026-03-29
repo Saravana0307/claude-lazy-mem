@@ -163,6 +163,7 @@ case "$CMD" in
   benchmark) shift; cmd_benchmark "$@" ;;
   web)       cmd_web ;;
   doctor)    cmd_doctor ;;
+  calibrate) python3 "$INSTALL_DIR/scripts/db.py" calibrate ;;
   help|--help|-h)
     echo "Usage: lazy-mem [command]"
     echo ""
@@ -172,6 +173,7 @@ case "$CMD" in
     echo "  lazy        Set lazy mode"
     echo "  full        Set full mode"
     echo "  benchmark   Detailed token savings report"
+    echo "  calibrate   Measure actual context load size for accurate savings"
     echo "  web         Open web dashboard (localhost:7124)"
     echo "  doctor      Verify all hooks are correctly set up"
     echo "  help        Show this help"
