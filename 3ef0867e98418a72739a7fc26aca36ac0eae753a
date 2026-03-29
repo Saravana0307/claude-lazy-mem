@@ -1,0 +1,38 @@
+config/claude-md-snippet.md
+  7340b1e06472608e 9-13,15,17-18,20-23
+bin/lazy-mem
+  7340b1e06472608e 166,176
+ui/templates/index.html
+  7340b1e06472608e 120,123-128
+ui/server.py
+  7340b1e06472608e 21,23-31,63,67-68,74,80,82,87-88,130,139,145,149,157-182,235-236
+install.sh
+  7340b1e06472608e 63-67
+scripts/db.py
+  7340b1e06472608e 8,22-23,61-114,159,166,168-169,176-177,179,236,243,252,258,270,290,299,307
+skills/mem-toggle.md
+  7340b1e06472608e 5,15,19,23,28-32,34,36-37,40-41
+ui/static/app.js
+  7340b1e06472608e 60-62,67-68,81-82,84,254-272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "3ef0867e98418a72739a7fc26aca36ac0eae753a",
+  "prompts": {
+    "7340b1e06472608e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "635362b1-0f8b-47eb-a954-7f43554976d6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "saravanakumartaza <saravanakumar@tazapay.com>",
+      "messages": [],
+      "total_additions": 193,
+      "total_deletions": 51,
+      "accepted_lines": 193,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/8f78ffa2310b4a40ca05f8c497ef64e8f37ad05e2ed982f1dba15cf1b6072b87"
+    }
+  }
+}
